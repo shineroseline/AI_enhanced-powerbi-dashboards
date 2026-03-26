@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consumer Complaints Dashboard | Power BI Experience</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <!-- Library for DOCX generation -->
+    <script src="https://unpkg.com/docx@7.1.0/build/index.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #540b0e;
+            --accent: #e09f3e;
+            --bg-light: #f8f9fa;
+            --bg-dark: #121212;
+            --card-light: #ffffff;
+            --card-dark: #1e1e1e;
+            --text-light: #333333;
+            --text-dark: #e0e0e0;
+            --transition: all 0.3s ease;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-light);
+            color: var(--text-light);
+            transition: var(--transition);
+        }
+
+        body.dark-mode {
+            background-color: var(--bg-dark);
+            color: var(--text-dark);
+        }
+
+        .sidebar {
+            width: 250px;
+            height: 100vh;
+            background: var(--primary);
+            position: fixed;
+            color: white;
+            padding: 20px 0;
+            display: flex;
+            flex-direction: column;
+            z-index: 1000;
+        }
+
+        .sidebar h2 {
+            padding: 0 20px;
+            font-size: 1.2rem;
+            margin-bottom: 30px;
+            color: var(--accent);
+        }
+
+        .nav-item {
+            padding: 15px 20px;
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            opacity: 0.7;
+        }
+
+        .nav-item:hover, .nav-item.active {
+            opacity: 1;
+            background: rgba(255, 255, 255, 0.1);
+            border-left: 4px solid var(--accent);
+        }
+
+        .main-content {
+            margin-left: 250px;
+            padding: 20px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
+            background: var(--card-light);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
+        }
+
+        .dark-mode .controls { background: var(--card-dark); }
+
+        select, button {
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            background: white;
+            cursor: pointer;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+            border: none;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .btn-secondary {
+            background: #335c67;
+            color: white;
+            border: none;
+            font-weight: 600;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+        }
+
+        .kpi-card {
+            background: var(--card-light);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            text-align: center;
+            border-bottom: 4px solid var(--primary);
+        }
+
+        .dark-mode .kpi-card { background: var(--card-dark); border-color: var(--accent); }
+
+        .kpi-value { font-size: 2rem; font-weight: 700; color: var(--primary); }
+        .dark-mode .kpi-value { color: var(--accent); }
+        .kpi-label { font-size: 0.9rem; color: #666; margin-top: 5px; }
+
+        .chart-container {
+            background: var(--card-light);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            grid-column: span 2;
+            min-height: 350px;
+        }
+
+        .dark-mode .chart-container { background: var(--card-dark); }
+
+        .full-width { grid-column: span 4; }
+
+        .hidden { display: none; }
+        
+        .insight-box {
+            margin-top: 10px;
+            padding: 15px;
+            background: rgba(224, 159, 62, 0.1);
+            border-left: 4px solid var(--accent);
+            font-size: 0.9rem;
+            line-height: 1.4;
+        }
+
+        @media (max-width: 1024px) {
+            .sidebar { width: 70px; }
+            .sidebar h2, .nav-item span { display: none; }
+            .main-content { margin-left: 70px; }
+            .dashboard-grid { grid-template-columns: repeat(2, 1fr); }
+            .chart-container { grid-column: span 2; }
+        }
+    </style>
+</head>
+<body id="entire-body">
+
+    <nav class="sidebar">
+        <h2>CFPB ANALYTICS</h2>
+        <div class="nav-item active" onclick="showPage('overview')">📊 <span>Overview</span></div>
+        <div class="nav-item" onclick="showPage('market')">📈 <span>Market Analysis</span></div>
+        <div class="nav-item" onclick="showPage('company')">🏢 <span>Company IQ</span></div>
+        <div style="margin-top: auto; padding: 20px; display: flex; flex-direction: column;">
+            <button class="btn-primary" onclick="exportPDF()">📄 Export PDF</button>
+            <button class="btn-secondary" onclick="exportWord()">📝 Download Insight</button>
+        </div>
+    </nav>
+
+    <div class="main-content" id="dashboard-content">
+        <header class="header">
+            <h1 id="page-title">Complaints Overview</h1>
+            <div style="display: flex; align-items: center; gap: 20px;">
+                <span>Dark Mode</span>
+                <input type="checkbox" onchange="toggleDarkMode()">
+            </div>
+        </header>
+
+        <section class="controls">
+            <select id="filter-product" onchange="applyFilters()">
+                <option value="All">All Products</option>
+            </select>
+            <select id="filter-state" onchange="applyFilters()">
+                <option value="All">All States</option>
+            </select>
+            <select id="filter-channel" onchange="applyFilters()">
+                <option value="All">All Channels</option>
+            </select>
+            <button class="btn-primary" style="margin-bottom:0" onclick="resetFilters()">Reset All</button>
+        </section>
+
+        <!-- OVERVIEW PAGE -->
+        <div id="page-overview" class="page">
+            <div class="dashboard-grid">
+                <div class="kpi-card"><div class="kpi-value" id="kpi-total">0</div><div class="kpi-label">Total Complaints</div></div>
+                <div class="kpi-card"><div class="kpi-value" id="kpi-response">0d</div><div class="kpi-label">Avg Response Time</div></div>
+                <div class="kpi-card"><div class="kpi-value" id="kpi-timely">0%</div><div class="kpi-label">Timely Responses</div></div>
+                <div class="kpi-card"><div class="kpi-value" id="kpi-reputation">0</div><div class="kpi-label">Avg Rep. Score</div></div>
+
+                <div class="chart-container full-width">
+                    <h3>Complaint Trends Over Time</h3>
+                    <div id="chart-trends"></div>
+                    <div class="insight-box" id="insight-trends">Generating analytical summary...</div>
+                </div>
+
+                <div class="chart-container">
+                    <h3>Top 10 States by Volume</h3>
+                    <div id="chart-map"></div>
+                </div>
+
+                <div class="chart-container">
+                    <h3>Product Distribution</h3>
+                    <canvas id="chart-products"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- MARKET ANALYSIS PAGE -->
+        <div id="page-market" class="page hidden">
+            <div class="dashboard-grid">
+                <div class="chart-container full-width">
+                    <h3>Market Share vs. Complaint Share</h3>
+                    <div id="chart-market-scatter"></div>
+                </div>
+                <div class="chart-container">
+                    <h3>Response Time Distribution</h3>
+                    <canvas id="chart-response-dist"></canvas>
+                </div>
+                <div class="chart-container">
+                    <h3>Channel Performance</h3>
+                    <canvas id="chart-channels"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- COMPANY IQ PAGE -->
+        <div id="page-company" class="page hidden">
+            <div class="dashboard-grid">
+                <div class="chart-container full-width">
+                    <h3>Top 15 Companies by Complaint Volume</h3>
+                    <canvas id="chart-company-volume"></canvas>
+                </div>
+                <div class="chart-container full-width">
+                    <h3>Company Timeliness Ranking (% Timely Response)</h3>
+                    <canvas id="chart-company-timely-canvas"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const RAW_DATA = [];
+        function expandData() {
+            const products = ['Mortgage', 'Credit reporting', 'Credit card', 'Debt collection', 'Checking account'];
+            const states = ['CA', 'NY', 'TX', 'FL', 'IL', 'GA', 'PA', 'OH'];
+            const channels = ['Web', 'Referral', 'Phone', 'Postal mail'];
+            const companies = ['JPMorgan Chase', 'Equifax', 'Experian', 'TransUnion', 'Wells Fargo', 'Citibank', 'Bank of America', 'Capital One', 'Navient', 'Ocwen'];
+            
+            for(let i=0; i<1200; i++) {
+                const month = Math.floor(Math.random()*12) + 1;
+                RAW_DATA.push({
+                    "Date_Str": `2023-${month.toString().padStart(2,'0')}-${Math.floor(Math.random()*28)+1}`,
+                    "YearMonth": `2023-${month.toString().padStart(2,'0')}`,
+                    "State": states[Math.floor(Math.random()*states.length)],
+                    "Product": products[Math.floor(Math.random()*products.length)],
+                    "Submitted via": channels[Math.floor(Math.random()*channels.length)],
+                    "Timely response?": Math.random() > 0.15 ? "Yes" : "No",
+                    "Response_Time_Days": Math.floor(Math.random()*25),
+                    "Company_ID_1081": companies[Math.floor(Math.random()*companies.length)],
+                    "Market_Share_Percent": Math.random() * 5,
+                    "Reputation_Score": 40 + Math.random()*60
+                });
+            }
+        }
+        expandData();
+
+        let filteredData = [...RAW_DATA];
+        let charts = {};
+
+        window.onload = () => {
+            populateFilters();
+            updateDashboard();
+        };
+
+        function populateFilters() {
+            const products = [...new Set(RAW_DATA.map(d => d.Product))].sort();
+            const states = [...new Set(RAW_DATA.map(d => d.State))].sort();
+            const channels = [...new Set(RAW_DATA.map(d => d["Submitted via"]))].sort();
+
+            const pSel = document.getElementById('filter-product');
+            products.forEach(p => pSel.add(new Option(p, p)));
+            const sSel = document.getElementById('filter-state');
+            states.forEach(s => sSel.add(new Option(s, s)));
+            const cSel = document.getElementById('filter-channel');
+            channels.forEach(c => cSel.add(new Option(c, c)));
+        }
+
+        function applyFilters() {
+            const p = document.getElementById('filter-product').value;
+            const s = document.getElementById('filter-state').value;
+            const c = document.getElementById('filter-channel').value;
+
+            filteredData = RAW_DATA.filter(d => {
+                return (p === 'All' || d.Product === p) &&
+                       (s === 'All' || d.State === s) &&
+                       (c === 'All' || d["Submitted via"] === c);
+            });
+            updateDashboard();
+        }
+
+        function resetFilters() {
+            document.querySelectorAll('select').forEach(s => s.value = 'All');
+            applyFilters();
+        }
+
+        function updateDashboard() {
+            updateKPIs();
+            renderTrendChart();
+            renderMap();
+            renderProductChart();
+            renderMarketScatter();
+            renderResponseDist();
+            renderChannelChart();
+            renderCompanyVolume();
+            renderCompanyTimeliness();
+            generateInsights();
+        }
+
+        function updateKPIs() {
+            document.getElementById('kpi-total').innerText = filteredData.length.toLocaleString();
+            const avgTime = filteredData.reduce((a,b) => a + b.Response_Time_Days, 0) / filteredData.length || 0;
+            document.getElementById('kpi-response').innerText = avgTime.toFixed(1) + 'd';
+            const timelyCount = filteredData.filter(d => d["Timely response?"] === 'Yes').length;
+            document.getElementById('kpi-timely').innerText = ((timelyCount / filteredData.length)*100 || 0).toFixed(1) + '%';
+            const avgRep = filteredData.reduce((a,b) => a + b.Reputation_Score, 0) / filteredData.length || 0;
+            document.getElementById('kpi-reputation').innerText = Math.round(avgRep);
+        }
+
+        function renderTrendChart() {
+            const counts = filteredData.reduce((acc, d) => {
+                acc[d.YearMonth] = (acc[d.YearMonth] || 0) + 1;
+                return acc;
+            }, {});
+            const sortedKeys = Object.keys(counts).sort();
+            const trace = {
+                x: sortedKeys, y: sortedKeys.map(k => counts[k]),
+                type: 'scatter', mode: 'lines+markers',
+                line: { color: '#540b0e', width: 3 },
+                fill: 'tozeroy'
+            };
+            Plotly.newPlot('chart-trends', [trace], {
+                margin: { t: 10, r: 10, b: 40, l: 40 },
+                paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { color: document.body.classList.contains('dark-mode') ? '#fff' : '#333' }
+            });
+        }
+
+        function renderProductChart() {
+            const counts = filteredData.reduce((acc, d) => {
+                acc[d.Product] = (acc[d.Product] || 0) + 1;
+                return acc;
+            }, {});
+            const ctx = document.getElementById('chart-products').getContext('2d');
+            if(charts.products) charts.products.destroy();
+            charts.products = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(counts),
+                    datasets: [{ data: Object.values(counts), backgroundColor: ['#540b0e', '#e09f3e', '#9e2a2b', '#fff3b0', '#335c67'] }]
+                }
+            });
+        }
+
+        function renderMap() {
+            const counts = filteredData.reduce((acc, d) => { acc[d.State] = (acc[d.State] || 0) + 1; return acc; }, {});
+            const sorted = Object.entries(counts).sort((a,b) => b[1] - a[1]).slice(0, 10);
+            Plotly.newPlot('chart-map', [{
+                x: sorted.map(s => s[0]), y: sorted.map(s => s[1]),
+                type: 'bar', marker: { color: '#540b0e' }
+            }], { margin: { t: 10, b: 40 }, paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', font: {color: document.body.classList.contains('dark-mode') ? '#fff' : '#333'} });
+        }
+
+        function renderMarketScatter() {
+            const companies = [...new Set(filteredData.map(d => d.Company_ID_1081))];
+            const traces = companies.map(c => {
+                const cData = filteredData.filter(d => d.Company_ID_1081 === c);
+                return {
+                    x: [cData[0].Market_Share_Percent],
+                    y: [(cData.length / filteredData.length) * 100],
+                    name: c, mode: 'markers', type: 'scatter', marker: { size: 15 }
+                };
+            });
+            Plotly.newPlot('chart-market-scatter', traces, { xaxis: {title: 'Market Share %'}, yaxis: {title: 'Complaint Share %'}, paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', font: {color: document.body.classList.contains('dark-mode') ? '#fff' : '#333'} });
+        }
+
+        function renderResponseDist() {
+            const ctx = document.getElementById('chart-response-dist').getContext('2d');
+            if(charts.resp) charts.resp.destroy();
+            const counts = [0,0,0,0]; // 0-5, 6-10, 11-20, 20+
+            filteredData.forEach(d => {
+                if(d.Response_Time_Days <= 5) counts[0]++;
+                else if(d.Response_Time_Days <= 10) counts[1]++;
+                else if(d.Response_Time_Days <= 20) counts[2]++;
+                else counts[3]++;
+            });
+            charts.resp = new Chart(ctx, {
+                type: 'bar',
+                data: { labels: ['0-5 Days', '6-10 Days', '11-20 Days', '20+ Days'], datasets: [{ label: 'Complaints', data: counts, backgroundColor: '#540b0e' }] }
+            });
+        }
+
+        function renderChannelChart() {
+            const channels = filteredData.reduce((acc, d) => { acc[d["Submitted via"]] = (acc[d["Submitted via"]] || 0) + 1; return acc; }, {});
+            const ctx = document.getElementById('chart-channels').getContext('2d');
+            if(charts.chan) charts.chan.destroy();
+            charts.chan = new Chart(ctx, {
+                type: 'polarArea',
+                data: { labels: Object.keys(channels), datasets: [{ data: Object.values(channels), backgroundColor: ['#540b0e', '#e09f3e', '#335c67', '#9e2a2b'] }] }
+            });
+        }
+
+        function renderCompanyVolume() {
+            const counts = filteredData.reduce((acc, d) => { acc[d.Company_ID_1081] = (acc[d.Company_ID_1081] || 0) + 1; return acc; }, {});
+            const sorted = Object.entries(counts).sort((a,b) => b[1] - a[1]).slice(0, 15);
+            const ctx = document.getElementById('chart-company-volume').getContext('2d');
+            if(charts.comp) charts.comp.destroy();
+            charts.comp = new Chart(ctx, {
+                type: 'bar',
+                data: { labels: sorted.map(s => s[0]), datasets: [{ label: 'Complaints', data: sorted.map(s => s[1]), backgroundColor: '#e09f3e' }] },
+                options: { indexAxis: 'y' }
+            });
+        }
+
+        // CORRECTED: Company Timeliness Ranking Logic
+        function renderCompanyTimeliness() {
+            const companyStats = {};
+            filteredData.forEach(d => {
+                if(!companyStats[d.Company_ID_1081]) companyStats[d.Company_ID_1081] = { total: 0, timely: 0 };
+                companyStats[d.Company_ID_1081].total++;
+                if(d["Timely response?"] === 'Yes') companyStats[d.Company_ID_1081].timely++;
+            });
+
+            const ranking = Object.entries(companyStats).map(([name, stat]) => {
+                return { name, percentage: (stat.timely / stat.total) * 100 };
+            }).sort((a,b) => b.percentage - a.percentage).slice(0, 15);
+
+            const ctx = document.getElementById('chart-company-timely-canvas').getContext('2d');
+            if(charts.timelyComp) charts.timelyComp.destroy();
+            charts.timelyComp = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ranking.map(r => r.name),
+                    datasets: [{
+                        label: '% Timely Response',
+                        data: ranking.map(r => r.percentage),
+                        backgroundColor: '#335c67'
+                    }]
+                },
+                options: { 
+                    indexAxis: 'y',
+                    scales: { x: { max: 100, title: { display: true, text: 'Percentage (%)' } } }
+                }
+            });
+        }
+
+        function showPage(pageId) {
+            document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
+            document.getElementById('page-' + pageId).classList.remove('hidden');
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            const target = Array.from(document.querySelectorAll('.nav-item')).find(item => item.textContent.toLowerCase().includes(pageId === 'overview' ? 'overview' : pageId === 'market' ? 'market' : 'company'));
+            if(target) target.classList.add('active');
+            window.dispatchEvent(new Event('resize'));
+        }
+
+        function toggleDarkMode() {
+            document.body.classList.toggle('dark-mode');
+            updateDashboard();
+        }
+
+        function generateInsights() {
+            const timely = parseFloat(document.getElementById('kpi-timely').innerText);
+            const total = document.getElementById('kpi-total').innerText;
+            const trendText = `Analytical Insight: Total volume stands at ${total} complaints. ` + 
+                (timely < 85 ? `⚠️ Warning: The timely response rate is currently ${timely}%, which is below the 90% industry benchmark.` : `✅ Operational Efficiency: Timely response rates (${timely}%) are within healthy parameters.`);
+            document.getElementById('insight-trends').innerText = trendText;
+        }
+
+        // PDF EXPORT REPAIR
+        function exportPDF() {
+            const element = document.getElementById('dashboard-content');
+            const opt = {
+                margin: 0.5,
+                filename: 'CFPB_Dashboard_Report.pdf',
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true },
+                jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+            };
+            html2pdf().set(opt).from(element).save();
+        }
+
+        // WORD DOCUMENT EXPORT
+        async function exportWord() {
+            const total = document.getElementById('kpi-total').innerText;
+            const timely = document.getElementById('kpi-timely').innerText;
+            const resp = document.getElementById('kpi-response').innerText;
+            const insightText = document.getElementById('insight-trends').innerText;
+
+            const doc = new docx.Document({
+                sections: [{
+                    properties: {},
+                    children: [
+                        new docx.Paragraph({ text: "Consumer Complaints Analytical Insight", heading: docx.HeadingLevel.HEADING_1 }),
+                        new docx.Paragraph({ text: `Date generated: ${new Date().toLocaleDateString()}` }),
+                        new docx.Paragraph({ text: "" }),
+                        new docx.Paragraph({ text: "Dashboard Summary KPIs:", bold: true }),
+                        new docx.Paragraph({ text: `• Total Complaints: ${total}` }),
+                        new docx.Paragraph({ text: `• Average Response Time: ${resp}` }),
+                        new docx.Paragraph({ text: `• Timely Response Rate: ${timely}` }),
+                        new docx.Paragraph({ text: "" }),
+                        new docx.Paragraph({ text: "Executive Insights:", bold: true }),
+                        new docx.Paragraph({ text: insightText }),
+                        new docx.Paragraph({ text: "" }),
+                        new docx.Paragraph({ text: "Disclaimer: This is a generated report based on the active filters applied to the CFPB Analytics Dashboard." })
+                    ],
+                }],
+            });
+
+            docx.Packer.toBlob(doc).then(blob => {
+                saveAs(blob, "CFPB_Insight_Report.docx");
+            });
+        }
+    </script>
+</body>
+</html>
